@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "rustpynet_test/Cargo.toml"
+    ]
+}
