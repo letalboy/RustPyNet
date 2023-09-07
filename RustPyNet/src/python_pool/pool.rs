@@ -12,6 +12,8 @@ use lazy_static::lazy_static;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
+use std::fmt::{self, format};
+
 use crate::CLIENT_PYTHON_PROCESS_QUEUE;
 
 macro_rules! acquire_python_queue {
@@ -62,14 +64,6 @@ macro_rules! with_python_queue {
 }
 
 // In rustpynet_traits
-pub trait TaskQueue {
-    // Define the methods and behaviors here
-}
-
-// In RustPyNet
-impl TaskQueue for PythonTaskQueue {
-    // Implement the methods here
-}
 
 // lazy_static! {
 //     pub static ref PYTHON_TASK_QUEUE: PythonTaskQueue = PythonTaskQueue::new();
@@ -84,23 +78,70 @@ pub enum PythonTaskError {
     // Add other error variants as needed
 }
 
-type MyResult<T> = Result<T, PythonTaskError>;
-
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum PythonTaskResult {
-    Int(i32),
+    Map(HashMap<String, PythonTaskResult>),
+    List(Vec<PythonTaskResult>),
     Str(String),
+    Int(i32),
     Float(f64),
-    // ... add other variants as needed
+    Bool(bool),
+    Empty,
+    Error(String),
 }
 
-type Task = (
-    Box<dyn for<'p> FnOnce(Python<'p>, std::sync::mpsc::Sender<MyResult<PythonTaskResult>>) + Send>,
-    std::sync::mpsc::Sender<MyResult<PythonTaskResult>>,
-);
+impl fmt::Display for PythonTaskResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PythonTaskResult::Empty => write!(f, "Empty"),
+            PythonTaskResult::Str(s) => write!(f, "\"{}\"", s),
+            PythonTaskResult::Int(i) => write!(f, "{}", i),
+            PythonTaskResult::Float(fl) => write!(f, "{}", fl),
+            PythonTaskResult::Bool(b) => write!(f, "{}", b),
+            PythonTaskResult::List(list) => {
+                write!(f, "[")?;
+                for (index, item) in list.iter().enumerate() {
+                    if index != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            }
+            PythonTaskResult::Map(map) => {
+                write!(f, "{{")?;
+                let mut first = true;
+                for (key, value) in map {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "\"{}\": {}", key, value)?;
+                    first = false;
+                }
+                write!(f, "}}")
+            }
+            PythonTaskResult::Error(err) => write!(f, "Error: {}", err),
+        }
+    }
+}
+
+pub type MyResult<T> = Result<T, PythonTaskError>;
+
+pub trait TaskQueue {
+    // Define the methods and behaviors here
+}
+
+pub trait PythonTask {
+    fn execute(&self, py: Python) -> MyResult<PythonTaskResult>;
+}
+
+// In RustPyNet
+impl TaskQueue for PythonTaskQueue {
+    // Implement the methods here
+}
 
 pub struct PythonTaskQueue {
-    tasks: Arc<Mutex<VecDeque<Task>>>,
+    tasks: Arc<Mutex<VecDeque<Box<dyn PythonTask + Send>>>>,
 }
 
 impl PythonTaskQueue {
@@ -112,28 +153,37 @@ impl PythonTaskQueue {
 
     pub fn enqueue(
         &self,
-        task_fn: Box<
-            dyn for<'p> FnOnce(Python<'p>, std::sync::mpsc::Sender<MyResult<PythonTaskResult>>)
-                + Send,
-        >,
+        task: Box<dyn PythonTask + Send>,
     ) -> std::sync::mpsc::Receiver<MyResult<PythonTaskResult>> {
         let (tx, rx) = std::sync::mpsc::channel();
-        let tx_clone = tx.clone();
-
-        let task = (task_fn, tx_clone);
-
-        let mut tasks = self.tasks.lock().unwrap();
-        tasks.push_back(task);
-        println!("Task enqueued. Total tasks in queue: {}", tasks.len());
-
+        self.tasks.lock().unwrap().push_back(task);
+        println!(
+            "Task enqueued. Total tasks in queue: {}",
+            self.tasks.lock().unwrap().len()
+        );
         rx // Return the receiver
     }
 
     pub fn wait_for_result(
         rx: std::sync::mpsc::Receiver<MyResult<PythonTaskResult>>,
     ) -> MyResult<PythonTaskResult> {
-        let result = rx.recv().unwrap();
-        result
+        match rx.recv() {
+            Ok(result) => match result {
+                Ok(val) => Ok(val),
+                Err(PythonTaskError::PythonError(e)) => Err(PythonTaskError::PythonError(e)),
+                Err(PythonTaskError::UnsupportedNumberType) => {
+                    Err(PythonTaskError::UnsupportedNumberType)
+                }
+                Err(PythonTaskError::UnsupportedValueType) => {
+                    Err(PythonTaskError::UnsupportedValueType)
+                }
+                Err(PythonTaskError::OtherError(e)) => Err(PythonTaskError::OtherError(e)),
+            },
+            Err(recv_error) => Err(PythonTaskError::OtherError(format!(
+                "Failed to receive result from worker thread due to: {}.",
+                recv_error
+            ))),
+        }
     }
 }
 
@@ -148,7 +198,7 @@ pub fn start_processing_host_python_tasks() {
             |python_queue: &mut PythonTaskQueue| { python_queue.tasks.clone() }
         );
 
-        println!("Hello");
+        // println!("Hello");
 
         // Check the number of tasks in the queue
         let num_tasks = tasks_clone.lock().unwrap().len();
@@ -160,9 +210,10 @@ pub fn start_processing_host_python_tasks() {
                 let py = unsafe { Python::assume_gil_acquired() };
                 println!("Python acquired!");
 
-                while let Some((task_fn, tx)) = tasks_clone.lock().unwrap().pop_front() {
+                while let Some(task) = tasks_clone.lock().unwrap().pop_front() {
                     println!("Executing a task from the queue...");
-                    task_fn(py, tx); // Just call the task_fn without expecting a return value
+                    let result = task.execute(py);
+                    // The task should internally send the result to its designated sender
                     println!("Task executed.");
                 }
             }

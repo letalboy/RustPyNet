@@ -2,6 +2,7 @@ extern crate proc_macro;
 
 // In your macro crate or module
 
+use heck::CamelCase;
 use proc_macro::TokenStream;
 use pyo3::{PyErr, PyObject, PyResult, Python};
 use quote::quote;
@@ -70,34 +71,41 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
         ReturnType::Type(_, ty) => quote! { #ty },
     };
 
+    let task_struct_name = format_ident!("{}Task", name.to_string().to_camel_case());
+
     let expanded = quote! {
-        fn #name(dict: &HashMap<String, PyAny>) -> #ret_type {
-            let task = Box::new(move |py: Python, tx: std::sync::mpsc::Sender<Result<PythonTaskResult, PythonTaskError>>| {
+        use RustPyNet::python_pool::pool::{PythonTask, MyResult};
+
+        struct #task_struct_name {
+            // This structure will be used to capture any necessary input for the Python function.
+            // For now, let's just keep a dictionary of strings.
+            dict: HashMap<String, String>,
+        }
+
+        impl PythonTask for #task_struct_name {
+            fn execute(&self, py: Python) -> MyResult<PythonTaskResult> {
                 let result: PyResult<PythonTaskResult> = (|| {
                     #block
                 })();
                 match result {
-                    Ok(val) => tx.send(Ok(val)).unwrap(),
-                    Err(err) => tx.send(Err(PythonTaskError::PythonError(format!("{:?}", err)))).unwrap(),
+                    Ok(val) => Ok(val),
+                    Err(err) => Err(PythonTaskError::PythonError(format!("{:?}", err))),
                 }
-            });
+            }
+        }
 
-            // Use the fully qualified path for the queue
+        fn #name(dict: &HashMap<String, String>) -> #ret_type {
+            let task = #task_struct_name {
+                dict: dict.clone(),
+            };
+
             match RustPyNet::CLIENT_PYTHON_PROCESS_QUEUE.try_lock() {
                 Ok(mut python_queue) => {
-                    println!("Locked on Pool macros!");
-                    let rx = python_queue.enqueue(task);
-                    println!("Get outside the enqueue");
-                    drop(python_queue);
-                    println!("Droped queue");
+                    let rx = python_queue.enqueue(Box::new(task));
                     let result = PythonTaskQueue::wait_for_result(rx);
-                    println!("Get result");
                     result
                 },
-                Err(_) => {
-                    println!("Not being able to lock on Pool macros!");
-                    Err(PythonTaskError::OtherError("Not being able to lock on Pool macros!".to_string()))
-                }
+                Err(_) => Err(PythonTaskError::OtherError("Not being able to lock on Pool".to_string()))
             }
         }
     };

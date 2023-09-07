@@ -9,13 +9,4 @@ pub use rustpynet_macros::*;
 lazy_static! {
     pub static ref CLIENT_PYTHON_PROCESS_QUEUE: Mutex<PythonTaskQueue> =
         Mutex::new(PythonTaskQueue::new());
-    pub static ref CALLBACK_PATTERNS: Arc<Mutex<std::collections::HashMap<&'static str, Box<dyn Fn() + Send + Sync + 'static>>>> = {
-        let m = std::collections::HashMap::new();
-        Arc::new(Mutex::new(m))
-    };
-}
-
-pub fn register_callback(name: &'static str, callback: Box<dyn Fn() + Send + Sync + 'static>) {
-    let mut callbacks = CALLBACK_PATTERNS.lock().unwrap();
-    callbacks.insert(name, callback);
 }

@@ -9,6 +9,7 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
+heck = "0.3"
 md5 = "0.7"
 pyo3 = { version = "0.15", features = ["extension-module"] }
 syn = "1.0"
