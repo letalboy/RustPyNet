@@ -1,9 +1,12 @@
 use RustPyNet::python_pool::pool::{start_processing_host_python_tasks, PythonTaskResult};
 use RustPyNet::run_with_py;
 
+use chrono::Duration;
 use pyo3::types::PyAny;
 use pyo3::{PyResult, Python};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::{self, format};
 use RustPyNet::python_pool::pool::PythonTaskError;
 use RustPyNet::python_pool::pool::PythonTaskQueue;
 use RustPyNet::python_pool::pool::TaskQueue;
@@ -92,11 +95,78 @@ macro_rules! acquire_python_queue {
 
 #[run_with_py]
 fn compute_sum(
-    dict: &HashMap<String, pyo3::types::PyAny>,
+    py: Python,
+    dict: &HashMap<String, String>,
 ) -> Result<PythonTaskResult, PythonTaskError> {
+    // Here, dict contains Rust strings. If you need to use them in Python,
+    // you'd convert them back to Python strings.
+
     // Sample Python code: compute the sum of 1 + 2
     let sum: i32 = py.eval("1 + 2", None, None)?.extract()?;
+    println!("Sum is: {}", sum);
     Ok(PythonTaskResult::Int(sum))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    #[test]
+    fn test_parallel_compute_sum() {
+        // Number of parallel tests to run
+        const NUM_TESTS: usize = 10;
+
+        // Initialize the Python interpreter
+        pyo3::prepare_freethreaded_python();
+
+        // Start processing tasks in a separate thread
+        std::thread::spawn(move || {
+            start_processing_host_python_tasks();
+        });
+
+        std::thread::sleep(std::time::Duration::from_secs(2)); // Whait pool initialize!
+
+        // Channel to collect results
+        let (tx, rx) = mpsc::channel();
+
+        // Spawn multiple threads
+        let handles: Vec<_> = (0..NUM_TESTS)
+            .map(|_| {
+                let rust_string = "Hello!".to_string();
+                let mut sample_dict: HashMap<String, String> = HashMap::new();
+                sample_dict.insert("key".to_string(), rust_string);
+
+                let tx = tx.clone();
+
+                std::thread::spawn(move || {
+                    let result = compute_sum(&sample_dict).unwrap();
+                    tx.send(result).unwrap();
+                })
+            })
+            .collect();
+
+        // Wait for threads to complete and collect results
+        let mut results = Vec::new();
+        for _ in 0..NUM_TESTS {
+            results.push(rx.recv().unwrap());
+        }
+
+        // Check results for correctness
+        for result in results {
+            match result {
+                PythonTaskResult::Int(sum) => {
+                    assert_eq!(sum, 3); // 1 + 2 = 3
+                }
+                PythonTaskResult::Error(e) => {
+                    panic!("Received an error: {:?}", e);
+                }
+                _ => {
+                    panic!("Received an unexpected result");
+                }
+            }
+        }
+    }
 }
 
 fn main() {
@@ -108,23 +178,42 @@ fn main() {
         start_processing_host_python_tasks();
     });
 
+    std::thread::sleep(std::time::Duration::from_secs(2)); // Whait pool initialize!
+
     // Create a sample dictionary (if required by your function)
     let sample_dict = HashMap::new();
 
     // Use the macro-enabled function to compute the sum
     let result = compute_sum(&sample_dict);
 
-    // Print the result
+    println!("Result: {:?}", result);
+
     match result {
-        Ok(PythonTaskResult::Int(sum)) => {
-            println!("The sum is: {}", sum);
+        Ok(PythonTaskResult::Int(value)) => {
+            println!("The int is: {}", value);
         }
         Ok(PythonTaskResult::Float(value)) => {
-            println!("The value is: {}", value);
+            println!("The float is: {}", value);
         }
-        Ok(PythonTaskResult::Str(s)) => {
-            println!("The string is: {}", s);
+        Ok(PythonTaskResult::Str(value)) => {
+            println!("The string is: {}", value);
         }
+        Ok(PythonTaskResult::Map(value)) => {
+            println!("The map is: {:?}", value);
+        }
+        Ok(PythonTaskResult::List(value)) => {
+            println!("The list is: {:?}", value);
+        }
+        Ok(PythonTaskResult::Bool(value)) => {
+            println!("The bool is: {}", value);
+        }
+        Ok(PythonTaskResult::Error(value)) => {
+            println!("The Error is: {}", value);
+        }
+        Ok(PythonTaskResult::Empty) => {
+            println!("Empty");
+        }
+
         Err(PythonTaskError::PythonError(err)) => println!("Python error: {}", err),
         Err(PythonTaskError::UnsupportedNumberType) => println!("Error: Unsupported number type"),
         Err(PythonTaskError::UnsupportedValueType) => println!("Error: Unsupported value type"),
