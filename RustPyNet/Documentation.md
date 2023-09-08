@@ -11,11 +11,10 @@ graph TD
         A --> B
     end
 
-    U[SpawnThread] --> N
 
     subgraph SeparateThread[Separate Thread]
         style SeparateThread stroke:#a14FFF, fill:#a14FFF ,fill-opacity:0.1
-        N[Start: start_processing_host_python_tasks]
+
         E[Acquire Python task queue]
         F[Get Tasks]
         G[Tasks in queue?]
@@ -42,8 +41,6 @@ graph TD
         E --> |try lock| B
         B --> |lock| E
         
-        U --> N
-        N --> O
     end
 
     subgraph MainThread[Main Thread]
