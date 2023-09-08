@@ -9,6 +9,8 @@ use quote::quote;
 use syn::ExprPath;
 use syn::Ident;
 use syn::{parse_macro_input, ItemFn, ReturnType};
+extern crate quote;
+use quote::format_ident;
 
 #[proc_macro_attribute]
 pub fn set_socket_callback(_attrs: TokenStream, input: TokenStream) -> TokenStream {
@@ -35,31 +37,6 @@ pub fn set_socket_callback(_attrs: TokenStream, input: TokenStream) -> TokenStre
 
     output.into()
 }
-
-// macro_rules! with_python_queue {
-//     ($queue:expr, $code:expr) => {{
-//         let mut acquired = false;
-//         let mut result = None;
-//         while !acquired {
-//             match $queue.lock() {
-//                 Ok(mut guard) => {
-//                     acquired = true;
-//                     result = Some($code(&mut *guard)); // Pass the locked queue to the closure
-//                 }
-//                 Err(_) => {
-//                     let sleep_duration =
-//                         std::time::Duration::from_millis(rand::random::<u64>() % 1000);
-//                     println!("Not being able to lock on Pool Macros!");
-//                     std::thread::sleep(sleep_duration);
-//                 }
-//             }
-//         }
-//         result.expect("Failed to acquire python queue and execute code")
-//     }};
-// }
-
-extern crate quote;
-use quote::format_ident;
 
 #[proc_macro_attribute]
 pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {

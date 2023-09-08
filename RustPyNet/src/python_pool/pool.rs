@@ -220,7 +220,7 @@ pub fn start_processing_host_python_tasks() {
             }
         } else {
             // If no tasks, sleep for a short duration before checking again.
-            std::thread::sleep(std::time::Duration::from_millis(800));
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
 }
