@@ -108,6 +108,8 @@ fn main() {
         start_processing_host_python_tasks();
     });
 
+    std::thread::sleep(std::time::Duration::from_secs(2)); // Whait pool initialize!
+
     // Create a sample dictionary (if required by your function)
     let sample_dict = HashMap::new();
 
@@ -116,15 +118,31 @@ fn main() {
 
     // Print the result
     match result {
-        Ok(PythonTaskResult::Int(sum)) => {
-            println!("The sum is: {}", sum);
+        Ok(PythonTaskResult::Int(value)) => {
+            println!("The int is: {}", value);
         }
         Ok(PythonTaskResult::Float(value)) => {
-            println!("The value is: {}", value);
+            println!("The float is: {}", value);
         }
-        Ok(PythonTaskResult::Str(s)) => {
-            println!("The string is: {}", s);
+        Ok(PythonTaskResult::Str(value)) => {
+            println!("The string is: {}", value);
         }
+        Ok(PythonTaskResult::Map(value)) => {
+            println!("The map is: {:?}", value);
+        }
+        Ok(PythonTaskResult::List(value)) => {
+            println!("The list is: {:?}", value);
+        }
+        Ok(PythonTaskResult::Bool(value)) => {
+            println!("The bool is: {}", value);
+        }
+        Ok(PythonTaskResult::Error(value)) => {
+            println!("The Error is: {}", value);
+        }
+        Ok(PythonTaskResult::None) => {
+            println!("None");
+        }
+
         Err(PythonTaskError::PythonError(err)) => println!("Python error: {}", err),
         Err(PythonTaskError::UnsupportedNumberType) => println!("Error: Unsupported number type"),
         Err(PythonTaskError::UnsupportedValueType) => println!("Error: Unsupported value type"),

@@ -1,13 +1,13 @@
+use lazy_static::lazy_static;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::sync::mpsc::Sender;
 use std::sync::Condvar;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-
-use lazy_static::lazy_static;
 
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -51,10 +51,10 @@ macro_rules! with_python_queue {
                     acquired = true;
                     result = Some($code(&mut *guard));
                 }
-                Err(_) => {
+                Err(e) => {
                     let sleep_duration =
-                        std::time::Duration::from_millis(rand::random::<u64>() % 1000);
-                    println!("Not being able to lock on Pool!");
+                        std::time::Duration::from_millis(rand::random::<u64>() % 100);
+                    println!("Not being able to lock on Pool! Err {}", e);
                     std::thread::sleep(sleep_duration);
                 }
             }
@@ -86,14 +86,14 @@ pub enum PythonTaskResult {
     Int(i32),
     Float(f64),
     Bool(bool),
-    Empty,
+    None,
     Error(String),
 }
 
 impl fmt::Display for PythonTaskResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            PythonTaskResult::Empty => write!(f, "Empty"),
+            PythonTaskResult::None => write!(f, "None"),
             PythonTaskResult::Str(s) => write!(f, "\"{}\"", s),
             PythonTaskResult::Int(i) => write!(f, "{}", i),
             PythonTaskResult::Float(fl) => write!(f, "{}", fl),
@@ -132,7 +132,11 @@ pub trait TaskQueue {
 }
 
 pub trait PythonTask {
-    fn execute(&self, py: Python) -> MyResult<PythonTaskResult>;
+    fn execute(
+        &self,
+        py: Python,
+        tx: Sender<MyResult<PythonTaskResult>>,
+    ) -> MyResult<PythonTaskResult>;
 }
 
 // In RustPyNet
@@ -141,7 +145,14 @@ impl TaskQueue for PythonTaskQueue {
 }
 
 pub struct PythonTaskQueue {
-    tasks: Arc<Mutex<VecDeque<Box<dyn PythonTask + Send>>>>,
+    tasks: Arc<
+        Mutex<
+            VecDeque<(
+                Box<dyn PythonTask + Send>,
+                std::sync::mpsc::Sender<MyResult<PythonTaskResult>>,
+            )>,
+        >,
+    >,
 }
 
 impl PythonTaskQueue {
@@ -156,7 +167,7 @@ impl PythonTaskQueue {
         task: Box<dyn PythonTask + Send>,
     ) -> std::sync::mpsc::Receiver<MyResult<PythonTaskResult>> {
         let (tx, rx) = std::sync::mpsc::channel();
-        self.tasks.lock().unwrap().push_back(task);
+        self.tasks.lock().unwrap().push_back((task, tx));
         println!(
             "Task enqueued. Total tasks in queue: {}",
             self.tasks.lock().unwrap().len()
@@ -169,15 +180,7 @@ impl PythonTaskQueue {
     ) -> MyResult<PythonTaskResult> {
         match rx.recv() {
             Ok(result) => match result {
-                Ok(val) => Ok(val),
-                Err(PythonTaskError::PythonError(e)) => Err(PythonTaskError::PythonError(e)),
-                Err(PythonTaskError::UnsupportedNumberType) => {
-                    Err(PythonTaskError::UnsupportedNumberType)
-                }
-                Err(PythonTaskError::UnsupportedValueType) => {
-                    Err(PythonTaskError::UnsupportedValueType)
-                }
-                Err(PythonTaskError::OtherError(e)) => Err(PythonTaskError::OtherError(e)),
+                r => r,
             },
             Err(recv_error) => Err(PythonTaskError::OtherError(format!(
                 "Failed to receive result from worker thread due to: {}.",
@@ -190,36 +193,34 @@ impl PythonTaskQueue {
 pub fn start_processing_host_python_tasks() {
     println!("Start processing python calls!");
 
-    // Acquire the queue inside the function
-
     loop {
+        // Acquire the Python task queue.
         let tasks_clone = with_python_queue!(
             CLIENT_PYTHON_PROCESS_QUEUE,
             |python_queue: &mut PythonTaskQueue| { python_queue.tasks.clone() }
         );
 
-        // println!("Hello");
-
-        // Check the number of tasks in the queue
+        // Check the number of tasks in the queue.
         let num_tasks = tasks_clone.lock().unwrap().len();
         if num_tasks > 0 {
             println!("Number of tasks in queue: {}", num_tasks);
 
-            {
-                println!("Gill pool acquired!");
-                let py = unsafe { Python::assume_gil_acquired() };
-                println!("Python acquired!");
+            // Acquire the GIL and execute the Python tasks.
+            let gil_guard = Python::acquire_gil();
+            let py = gil_guard.python();
 
-                while let Some(task) = tasks_clone.lock().unwrap().pop_front() {
-                    println!("Executing a task from the queue...");
-                    let result = task.execute(py);
-                    // The task should internally send the result to its designated sender
-                    println!("Task executed.");
+            while let Some((task, tx)) = tasks_clone.lock().unwrap().pop_front() {
+                println!("Executing a task from the queue...");
+                match task.execute(py, tx) {
+                    Ok(_) => println!("Task successfully executed."),
+                    Err(e) => println!("Error executing task: {:?}", e),
                 }
+
+                println!("Task executed.");
             }
         } else {
-            // If no tasks, sleep for a short duration before checking again
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            // If no tasks, sleep for a short duration before checking again.
+            std::thread::sleep(std::time::Duration::from_millis(800));
         }
     }
 }

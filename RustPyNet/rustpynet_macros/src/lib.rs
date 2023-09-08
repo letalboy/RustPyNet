@@ -75,21 +75,28 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         use RustPyNet::python_pool::pool::{PythonTask, MyResult};
+        use std::sync::mpsc::Sender;
 
         struct #task_struct_name {
-            // This structure will be used to capture any necessary input for the Python function.
-            // For now, let's just keep a dictionary of strings.
             dict: HashMap<String, String>,
         }
 
         impl PythonTask for #task_struct_name {
-            fn execute(&self, py: Python) -> MyResult<PythonTaskResult> {
+            fn execute(&self, py: Python, tx: Sender<MyResult<PythonTaskResult>>) -> MyResult<PythonTaskResult> {
                 let result: PyResult<PythonTaskResult> = (|| {
                     #block
                 })();
-                match result {
-                    Ok(val) => Ok(val),
-                    Err(err) => Err(PythonTaskError::PythonError(format!("{:?}", err))),
+
+                // Send the result back through the provided channel.
+                let send_result = match result {
+                    Ok(val) => tx.send(Ok(val)),
+                    Err(err) => tx.send(Err(PythonTaskError::PythonError(format!("{:?}", err)))),
+                };
+
+                // Check if sending was successful.
+                match send_result {
+                    Ok(_) => Ok(PythonTaskResult::None),  // or some other suitable value indicating success
+                    Err(_) => Err(PythonTaskError::OtherError("Failed to send result back.".to_string())),
                 }
             }
         }
@@ -99,14 +106,15 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
                 dict: dict.clone(),
             };
 
-            match RustPyNet::CLIENT_PYTHON_PROCESS_QUEUE.try_lock() {
-                Ok(mut python_queue) => {
-                    let rx = python_queue.enqueue(Box::new(task));
-                    let result = PythonTaskQueue::wait_for_result(rx);
-                    result
-                },
-                Err(_) => Err(PythonTaskError::OtherError("Not being able to lock on Pool".to_string()))
-            }
+            let rx = {
+                let mut python_queue = match RustPyNet::CLIENT_PYTHON_PROCESS_QUEUE.try_lock() {
+                    Ok(queue) => queue,
+                    Err(_) => return Err(PythonTaskError::OtherError("Not being able to lock on Pool".to_string()))
+                };
+                python_queue.enqueue(Box::new(task))
+            };
+
+            PythonTaskQueue::wait_for_result(rx)
         }
     };
 
