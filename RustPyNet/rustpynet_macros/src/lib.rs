@@ -13,32 +13,6 @@ extern crate quote;
 use quote::format_ident;
 
 #[proc_macro_attribute]
-pub fn set_socket_callback(_attrs: TokenStream, input: TokenStream) -> TokenStream {
-    let input_fn = parse_macro_input!(input as ItemFn);
-    let fn_name = &input_fn.sig.ident;
-    let fn_block = &input_fn.block;
-
-    // Hash the function name to create a unique identifier
-    let hashed_name = format!("{:x}", md5::compute(fn_name.to_string()));
-    let register_fn_name = format_ident!("register_{}", hashed_name);
-
-    let output = quote! {
-        fn #fn_name() {
-            #fn_block
-        }
-
-        // This code will be generated outside the function
-        #[allow(clippy::redundant_closure)]
-        #[ctor::ctor]
-        fn #register_fn_name() {
-            RustPyNet::register_callback(stringify!(#fn_name), Box::new(#fn_name) as Box<dyn Fn() + Send + Sync + 'static>);
-        }
-    };
-
-    output.into()
-}
-
-#[proc_macro_attribute]
 pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let name = &input.sig.ident;
