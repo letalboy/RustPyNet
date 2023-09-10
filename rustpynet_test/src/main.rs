@@ -76,10 +76,13 @@ fn main() {
             }
 
             Err(PythonTaskError::PythonError(err)) => println!("Python error: {}", err),
+
             Err(PythonTaskError::UnsupportedNumberType) => {
                 println!("Error: Unsupported number type")
             }
+
             Err(PythonTaskError::UnsupportedValueType) => println!("Error: Unsupported value type"),
+
             Err(PythonTaskError::OtherError(err)) => println!("Other error: {}", err),
             // ... handle other variants of PythonTaskResult and error variants ...
         }

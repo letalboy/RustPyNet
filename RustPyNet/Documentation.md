@@ -21,7 +21,7 @@ graph TD
         H[Acquire GIL and get Python instance]
         I[Execute task]
         J[Print: Task successfully executed.]
-        K[Print error]
+        K[Error]
         L[Sleep for 100ms]
         M[End]
 
@@ -33,13 +33,15 @@ graph TD
         I -->|Ok| J
         I -->|Err| K
         J --> G
-        J --> D
+        J --> |response| D
         K --> G
         G --> |No| L
         L --> E
 
         E --> |try lock| B
         B --> |lock| E
+
+        K --> |error| D 
         
     end
 
