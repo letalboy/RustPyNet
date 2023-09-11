@@ -1,0 +1,3 @@
+[submodule "RustPyNet"]
+	path = RustPyNet
+	url = ssh://git@177.72.148.22:2269/home/git-repos/RustPyNet.git
