@@ -17,19 +17,19 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    # Navigate to the workspace directory to build
+    # Navigate to the workspace directory to build and test
     - name: Navigate to Workspace
       run: cd RustPyNetWorkspace
 
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --workspace --verbose
 
-    # Navigate back to the root directory to run tests
+    # Navigate back to the root directory to run tests outside the workspace
     - name: Navigate to Root
       run: cd ..
 
-    # Run tests from the test directory
-    - name: Run tests
+    # Run tests from the rustpynet_test directory
+    - name: Run rustpynet_test tests
       run: |
         cd rustpynet_test
         cargo test --verbose
