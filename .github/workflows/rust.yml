@@ -22,7 +22,7 @@ jobs:
       run: cd RustPyNetWorkspace
 
     - name: Clean
-      run: cargo clean --workspace --verbose
+      run: cargo clean
       
     - name: Check
       run: cargo check --workspace --verbose
