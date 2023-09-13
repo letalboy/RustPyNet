@@ -2,8 +2,13 @@
 name = "rustpynet_macros"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Procedural macros for RustPyNet."
+authors = ["Cristian Camargo Filho <ccf@cdone.com.br>"]
+license = "MIT"  # Assuming MIT, replace with your actual license
+homepage = "https://github.com/letalboy/RustPyNet"  # Optional: Replace with your repository URL
+documentation = "https://docs.rs/rustpynet_macros"  # This is automatically set by docs.rs, but you can provide a custom one if needed
+categories = ["development-tools::bindings", "python", "development-tools::macros"] # Optional: Categories that fit your crate
+keywords = ["python", "proc-macro", "pyo3"]  # Optional: Keywords related to your crate
 
 [lib]
 proc-macro = true
