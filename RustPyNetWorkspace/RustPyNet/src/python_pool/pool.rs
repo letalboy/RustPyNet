@@ -16,6 +16,10 @@ use std::fmt::{self, format};
 
 use crate::CLIENT_PYTHON_PROCESS_QUEUE;
 
+/// Attempts to lock the provided Python queue and returns it.
+///
+/// This macro will repeatedly try to lock the provided queue until it succeeds.
+/// It will sleep for a random duration between attempts.
 macro_rules! acquire_python_queue {
     ($queue:expr) => {{
         let mut acquired = false;
@@ -41,6 +45,10 @@ macro_rules! acquire_python_queue {
     }};
 }
 
+/// Executes the provided code block with the provided Python queue.
+///
+/// This macro will try to lock the queue and execute the code block with it.
+/// It will return the result of the code block execution.
 macro_rules! with_python_queue {
     ($queue:expr, $code:expr) => {{
         let mut acquired = false;
@@ -63,12 +71,7 @@ macro_rules! with_python_queue {
     }};
 }
 
-// In rustpynet_traits
-
-// lazy_static! {
-//     pub static ref PYTHON_TASK_QUEUE: PythonTaskQueue = PythonTaskQueue::new();
-// }
-
+/// Represents various errors that can occur while processing Python tasks.
 #[derive(Debug)]
 pub enum PythonTaskError {
     PythonError(String),
@@ -78,6 +81,7 @@ pub enum PythonTaskError {
     // Add other error variants as needed
 }
 
+/// Represents the possible results returned by a Python task.
 #[derive(Clone, Debug)]
 pub enum PythonTaskResult {
     Map(HashMap<String, PythonTaskResult>),
@@ -125,12 +129,15 @@ impl fmt::Display for PythonTaskResult {
     }
 }
 
+/// Alias for a Result type used for Python tasks.
 pub type MyResult<T> = Result<T, PythonTaskError>;
 
+/// Trait representing a task queue.
 pub trait TaskQueue {
     // Define the methods and behaviors here
 }
 
+/// A trait representing tasks that can be executed in a Python context.
 pub trait PythonTask {
     fn execute(
         &self,
@@ -139,11 +146,13 @@ pub trait PythonTask {
     ) -> MyResult<PythonTaskResult>;
 }
 
+// Implementation for the TaskQueue trait for PythonTaskQueue.
 // In RustPyNet
 impl TaskQueue for PythonTaskQueue {
     // Implement the methods here
 }
 
+/// Represents a queue of Python tasks that are to be executed.
 pub struct PythonTaskQueue {
     tasks: Arc<
         Mutex<
@@ -156,12 +165,14 @@ pub struct PythonTaskQueue {
 }
 
 impl PythonTaskQueue {
+    /// Creates a new empty PythonTaskQueue.
     pub fn new() -> Self {
         Self {
             tasks: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
+    /// Adds a task to the queue and returns a Receiver to get the result.
     pub fn enqueue(
         &self,
         task: Box<dyn PythonTask + Send>,
@@ -175,6 +186,7 @@ impl PythonTaskQueue {
         rx // Return the receiver
     }
 
+    /// Waits for and retrieves the result of a Python task execution.
     pub fn wait_for_result(
         rx: std::sync::mpsc::Receiver<MyResult<PythonTaskResult>>,
     ) -> MyResult<PythonTaskResult> {
@@ -190,6 +202,10 @@ impl PythonTaskQueue {
     }
 }
 
+/// Starts processing Python tasks from the global task queue.
+///
+/// This function will continuously check the global task queue for tasks,
+/// execute them in a Python context, and send back the results.
 pub fn start_processing_host_python_tasks() {
     println!("Start processing python calls!");
 
