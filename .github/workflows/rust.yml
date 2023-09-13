@@ -21,8 +21,11 @@ jobs:
     - name: Navigate to Workspace
       run: cd RustPyNetWorkspace
 
-    - name: Build
-      run: cargo build --workspace --verbose
+    - name: Clean
+      run: cargo clean --workspace --verbose
+      
+    - name: Check
+      run: cargo check --workspace --verbose
 
     # Navigate back to the root directory to run tests outside the workspace
     - name: Navigate to Root
