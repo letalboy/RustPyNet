@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "RustPyNet"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "lazy_static",
@@ -390,6 +390,8 @@ dependencies = [
 [[package]]
 name = "rustpynet_macros"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9178ccbfedea7536836d62252e94ad2ad00d4110edc025b44b51015a5dce1249"
 dependencies = [
  "ctor",
  "heck",
