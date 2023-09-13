@@ -21,7 +21,7 @@ use quote::format_ident;
 ///
 /// ```ignore
 /// #[run_with_py]
-/// fn your_function_name(dict: &HashMap<String, String>) -> YourReturnType {
+/// fn your_function_name(context: &PythonTaskContext) -> YourReturnType {
 ///     // Your function implementation here
 /// }
 /// ```
@@ -52,18 +52,15 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
     let task_struct_name = format_ident!("{}Task", name.to_string().to_camel_case());
 
     let expanded = quote! {
-        use RustPyNet::python_pool::pool::{PythonTask, MyResult};
-        use std::sync::mpsc::Sender;
-
         struct #task_struct_name {
-            dict: HashMap<String, String>,
+            context: PythonTaskContext,
         }
 
         impl PythonTask for #task_struct_name {
             fn execute(&self, py: Python, tx: Sender<MyResult<PythonTaskResult>>) -> MyResult<PythonTaskResult> {
-                let result: PyResult<PythonTaskResult> = (|| {
+                let result: PyResult<PythonTaskResult> = (|context: &PythonTaskContext| {
                     #block
-                })();
+                })(&self.context);
 
                 // Send the result back through the provided channel.
                 let send_result = match result {
@@ -73,15 +70,15 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 // Check if sending was successful.
                 match send_result {
-                    Ok(_) => Ok(PythonTaskResult::None),  // or some other suitable value indicating success
+                    Ok(_) => Ok(PythonTaskResult::None),
                     Err(_) => Err(PythonTaskError::OtherError("Failed to send result back.".to_string())),
                 }
             }
         }
 
-        fn #name(dict: &HashMap<String, String>) -> #ret_type {
+        fn #name(context: &PythonTaskContext) -> #ret_type {
             let task = #task_struct_name {
-                dict: dict.clone(),
+                context: context.clone(),
             };
 
             let rx: std::sync::mpsc::Receiver<MyResult<PythonTaskResult>>;
@@ -99,7 +96,6 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
             }
-
 
             PythonTaskQueue::wait_for_result(rx)
         }

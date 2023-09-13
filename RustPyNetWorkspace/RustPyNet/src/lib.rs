@@ -18,6 +18,18 @@ pub mod python_pool;
 ///     // Your function implementation here
 /// }
 /// ```
+/// ### A more practical exemple:
+///
+/// ```ignore
+/// #[run_with_py]
+/// fn compute_sum(
+///     dict: &HashMap<String, pyo3::types::PyAny>,
+/// ) -> Result<PythonTaskResult, PythonTaskError> {
+///     // Sample Python code: compute the sum of 1 + 2
+///     let sum: i32 = py.eval("1 + 2", None, None)?.extract()?;
+///     Ok(PythonTaskResult::Int(sum))
+/// }
+/// ```
 ///
 /// This macro will create the necessary infrastructure for the function to be run in a Python context.
 ///
