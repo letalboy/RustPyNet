@@ -30,5 +30,6 @@ jobs:
     # Run tests from the rustpynet_test directory
     - name: Run rustpynet_test tests
       run: |
+        sudo apt-get install python3-dev
         cd rustpynet_test
         cargo test
