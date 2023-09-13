@@ -33,3 +33,4 @@ jobs:
         sudo apt-get install python3-dev
         cd rustpynet_test
         cargo test
+
