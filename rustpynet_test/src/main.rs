@@ -1,11 +1,11 @@
+use RustPyNet::python_pool::pool::PythonTaskError;
+use RustPyNet::python_pool::pool::PythonTaskQueue;
+use RustPyNet::python_pool::pool::TaskQueue;
 use RustPyNet::python_pool::pool::{start_processing_host_python_tasks, PythonTaskResult};
 use RustPyNet::run_with_py;
 
 use pyo3::{PyResult, Python};
 use std::collections::HashMap;
-use RustPyNet::python_pool::pool::PythonTaskError;
-use RustPyNet::python_pool::pool::PythonTaskQueue;
-use RustPyNet::python_pool::pool::TaskQueue;
 
 #[run_with_py]
 fn compute_sum(

@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "RustPyNet",
+    "rustpynet_macros"
+]
