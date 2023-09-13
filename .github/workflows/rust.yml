@@ -25,10 +25,10 @@ jobs:
     - name: Check
       run: | 
         cd RustPyNetWorkspace
-        cargo check --workspace --verbose
+        cargo check --workspace 
         
     # Run tests from the rustpynet_test directory
     - name: Run rustpynet_test tests
       run: |
         cd rustpynet_test
-        cargo test --verbose
+        cargo test
