@@ -1,0 +1,34 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Clean
+      run: | 
+        cd RustPyNetWorkspace
+        cargo clean
+      
+    - name: Check
+      run: | 
+        cd RustPyNetWorkspace
+        cargo check --workspace --verbose
+        
+    # Run tests from the rustpynet_test directory
+    - name: Run rustpynet_test tests
+      run: |
+        cd rustpynet_test
+        cargo test --verbose
