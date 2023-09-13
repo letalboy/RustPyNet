@@ -1,6 +1,5 @@
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
-use pyo3::types::IntoPyDict;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::mpsc::Sender;
@@ -13,6 +12,9 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 
 use std::fmt::{self, format};
+
+use pyo3::types::{IntoPyDict, PyDict, PyList, PyString, PyTuple};
+use pyo3::{Python, ToPyObject};
 
 use crate::CLIENT_PYTHON_PROCESS_QUEUE;
 
@@ -72,29 +74,53 @@ macro_rules! with_python_queue {
 }
 
 /// Represents various errors that can occur while processing Python tasks.
+///
+/// This enum encapsulates the different types of errors that might be encountered
+/// when interfacing with Python through the `pyo3` crate. It provides a structured way
+/// to handle these errors in Rust.
 #[derive(Debug)]
 pub enum PythonTaskError {
+    /// Represents a generic Python error with a given message.
     PythonError(String),
+    /// Indicates that an unsupported number type was encountered.
     UnsupportedNumberType,
+    /// Indicates that an unsupported value type was encountered.
     UnsupportedValueType,
+    /// Represents any other error with a given message.
     OtherError(String),
     // Add other error variants as needed
 }
 
 /// Represents the possible results returned by a Python task.
+///
+/// This enum models various data types and structures that
+/// can be returned from Python to Rust. It's a counterpart to `PythonTaskContext`,
+/// providing a way to easily convert between native Rust types and their Python results.
 #[derive(Clone, Debug)]
 pub enum PythonTaskResult {
+    /// A dictionary-like structure mapping string keys to other PythonTaskResult values.
     Map(HashMap<String, PythonTaskResult>),
+    /// A list-like structure containing other PythonTaskResult values.
     List(Vec<PythonTaskResult>),
+    /// A string value.
     Str(String),
+    /// An integer value.
     Int(i32),
+    /// A floating-point value.
     Float(f64),
+    /// A boolean value.
     Bool(bool),
+    /// Represents the absence of a value.
     None,
+    /// Represents an error with a given message.
     Error(String),
 }
 
 impl fmt::Display for PythonTaskResult {
+    /// Provides a way to format the `PythonTaskResult` for display purposes.
+    ///
+    /// This implementation is particularly useful for debugging and logging,
+    /// as it gives a human-readable representation of the result.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             PythonTaskResult::None => write!(f, "None"),
@@ -125,6 +151,101 @@ impl fmt::Display for PythonTaskResult {
                 write!(f, "}}")
             }
             PythonTaskResult::Error(err) => write!(f, "Error: {}", err),
+        }
+    }
+}
+
+/// Represents the possible contexts to send to a function that will run with Python.
+///
+/// This enum is designed to model various data types and structures that
+/// can be passed between Rust and Python, providing a way to easily convert
+/// between native Rust types and their Python counterparts.
+#[derive(Clone, Debug)]
+pub enum PythonTaskContext {
+    /// A dictionary-like structure mapping string keys to other PythonTaskContext values.
+    Map(HashMap<String, PythonTaskContext>),
+    /// A list-like structure containing other PythonTaskContext values.
+    List(Vec<PythonTaskContext>),
+    /// A string value
+    Str(String),
+    /// An integer value.
+    Int(i32),
+    /// A floating-point value.
+    Float(f64),
+    /// A boolean value.
+    Bool(bool),
+    /// Represents the absence of a value.
+    None,
+    /// Represents an error with a given message.
+    Error(String),
+}
+
+impl ToPyObject for PythonTaskContext {
+    /// Convert the `PythonTaskContext` into a corresponding PyObject.
+    ///
+    /// This method facilitates the conversion of the enum variants to their respective
+    /// Python objects, making it easier to pass Rust-native data to Python functions.
+    fn to_object(&self, py: Python) -> PyObject {
+        match self {
+            PythonTaskContext::Map(map) => {
+                let dict = PyDict::new(py);
+                for (key, value) in map {
+                    dict.set_item(key, value.to_object(py)).unwrap();
+                }
+                dict.to_object(py)
+            }
+            PythonTaskContext::List(lst) => {
+                let py_list = PyList::empty(py);
+                for item in lst {
+                    py_list.append(item.to_object(py)).unwrap();
+                }
+                py_list.to_object(py)
+            }
+            PythonTaskContext::Str(s) => PyString::new(py, s).to_object(py),
+            PythonTaskContext::Int(i) => i.to_object(py),
+            PythonTaskContext::Float(f) => f.to_object(py),
+            PythonTaskContext::Bool(b) => b.to_object(py),
+            PythonTaskContext::None => py.None(),
+            PythonTaskContext::Error(err) => PyString::new(py, err).to_object(py),
+        }
+    }
+}
+
+impl fmt::Display for PythonTaskContext {
+    /// Provides a way to format the `PythonTaskContext` for display purposes.
+    ///
+    /// This is particularly useful for debugging and logging, as it gives a human-readable
+    /// representation of the context.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PythonTaskContext::None => write!(f, "None"),
+            PythonTaskContext::Str(s) => write!(f, "\"{}\"", s),
+            PythonTaskContext::Int(i) => write!(f, "{}", i),
+            PythonTaskContext::Float(fl) => write!(f, "{}", fl),
+            PythonTaskContext::Bool(b) => write!(f, "{}", b),
+            PythonTaskContext::List(list) => {
+                write!(f, "[")?;
+                for (index, item) in list.iter().enumerate() {
+                    if index != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            }
+            PythonTaskContext::Map(map) => {
+                write!(f, "{{")?;
+                let mut first = true;
+                for (key, value) in map {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "\"{}\": {}", key, value)?;
+                    first = false;
+                }
+                write!(f, "}}")
+            }
+            PythonTaskContext::Error(err) => write!(f, "Error: {}", err),
         }
     }
 }

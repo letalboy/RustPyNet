@@ -21,20 +21,23 @@ Key Features:
 To get started with RustPyNet, you'll first need to import the necessary modules:
 
 ```rust
-use RustPyNet::python_pool::pool::{start_processing_host_python_tasks, PythonTaskResult};
-use RustPyNet::run_with_py;
+
+use RustPyNet::python_pool::pool::MyResult, 
+use RustPyNet::python_pool::pool::PythonTask;
+use RustPyNet::python_pool::pool::PythonTaskResult;
+use RustPyNet::python_pool::pool::PythonTaskContext; 
+use RustPyNet::python_pool::pool::PythonTaskQueue; 
 use RustPyNet::python_pool::pool::PythonTaskError;
-use RustPyNet::python_pool::pool::PythonTaskQueue;
-use RustPyNet::python_pool::pool::TaskQueue;
+use RustPyNet::run_with_py;
+
+use std::sync::mpsc::Sender;
 ```
 
 Here's a basic multithreading example that demonstrates how to use RustPyNet:
 
 ```rust
 #[run_with_py]
-fn compute_sum(
-    dict: &HashMap<String, pyo3::types::PyAny>,
-) -> Result<PythonTaskResult, PythonTaskError> {
+fn compute_sum(context: PythonTaskContext) -> Result<PythonTaskResult, PythonTaskError> {
     // Sample Python code: compute the sum of 1 + 2
     let sum: i32 = py.eval("1 + 2", None, None)?.extract()?;
     Ok(PythonTaskResult::Int(sum))
@@ -57,10 +60,9 @@ fn main() {
     let handles: Vec<_> = (0..NUM_TESTS)
         .map(|_| {
             let tx = tx.clone();
-            let sample_dict = HashMap::new();
-
+            let context = PythonTaskContext::None;
             std::thread::spawn(move || {
-                let result = compute_sum(&sample_dict);
+                let result = compute_sum(&context);
                 tx.send(result).unwrap();
             })
         })
@@ -125,7 +127,6 @@ fn main() {
         );
     }
 }
-
 ```
 
 In the above example, the `compute_sum` function is decorated with the `#[run_with_py]` attribute, allowing it to execute Python code within a Rust function. The function calculates the sum of two numbers using Python and returns the result.
