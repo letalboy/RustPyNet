@@ -32,3 +32,4 @@ jobs:
       run: |
         cd rustpynet_test
         cargo test
+
