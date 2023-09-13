@@ -13,7 +13,7 @@ dependencies = [
  "pyo3",
  "quote",
  "rand",
- "rustpynet_macros 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustpynet_macros",
  "syn 1.0.109",
 ]
 
@@ -392,20 +392,6 @@ dependencies = [
 [[package]]
 name = "rustpynet_macros"
 version = "0.1.2"
-dependencies = [
- "ctor",
- "heck",
- "md5",
- "pyo3",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "rustpynet_macros"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb4be3607bb39d508d1d7be57f250c0b47c3ea43c80be71e62526f9459be48f3"
 dependencies = [
  "ctor",
  "heck",

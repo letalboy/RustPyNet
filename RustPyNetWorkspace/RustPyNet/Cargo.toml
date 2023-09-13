@@ -11,7 +11,7 @@ categories = ["development-tools::bindings", "python"]
 keywords = ["python", "threading", "pyo3"]  
 
 [dependencies]
-rustpynet_macros = "0.1.2"
+rustpynet_macros = { path = "../rustpynet_macros" } # Don't forget to change this when publish to the current rustpynet_macros crate version
 md5 = "0.7"
 pyo3 = "0.15"
 lazy_static = "1.4"
