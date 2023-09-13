@@ -4,7 +4,7 @@
 RustPyNet is designed to bridge the gap between Python and Rust, offering a Python operations processing pool that integrates seamlessly with the PyO3 crate.
 
 - You can see the crate in: https://crates.io/crates/RustPyNet/
-- And the crate docs in: https://docs.rs/RustPyNet/0.1.1/RustPyNet/
+- And the crate docs in: https://docs.rs/RustPyNet/0.1.3/RustPyNet/
 
 ## Objective
 
