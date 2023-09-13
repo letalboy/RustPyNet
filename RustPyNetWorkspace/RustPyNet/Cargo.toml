@@ -1,6 +1,6 @@
 [package]
 name = "RustPyNet"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "RustPyNet is a crate designed to help use python inside multiple threads for small-medium workloads like calling fast execution callbacks and small-medium operations from multiple places in an orchestrated manner. RustPyNet is built on top of PyO3 and supports all PyO3 python operations, including basic responses for returning function results."
 authors = ["Cristian Camargo Filho <ccf@cdone.com.br>"]
@@ -11,7 +11,7 @@ categories = ["development-tools::bindings", "python"]
 keywords = ["python", "threading", "pyo3"]  
 
 [dependencies]
-rustpynet_macros = { path = "../rustpynet_macros" } # Don't forget to change this when publish to the current rustpynet_macros crate version
+rustpynet_macros = "0.1.2"
 md5 = "0.7"
 pyo3 = "0.15"
 lazy_static = "1.4"

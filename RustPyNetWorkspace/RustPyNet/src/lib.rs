@@ -12,22 +12,44 @@ pub mod python_pool;
 ///
 /// # Usage
 ///
-/// ```ignore
-/// #[run_with_py]
-/// fn your_function_name(dict: &HashMap<String, String>) -> YourReturnType {
-///     // Your function implementation here
-/// }
-/// ```
-/// ### A more practical exemple:
-///
-/// ```ignore
+/// ``` ignore
 /// #[run_with_py]
 /// fn compute_sum(
-///     dict: &HashMap<String, pyo3::types::PyAny>,
+///     context: &PythonTaskContext,
 /// ) -> Result<PythonTaskResult, PythonTaskError> {
+///     // from here you can use both the context and py
 ///     // Sample Python code: compute the sum of 1 + 2
 ///     let sum: i32 = py.eval("1 + 2", None, None)?.extract()?;
 ///     Ok(PythonTaskResult::Int(sum))
+/// }
+///```
+/// py in this case is injected by the proc macro, so don't worry because of not see the py arg in the args, it is added when proc macro wraps the fn that you decorated with he
+///
+/// ### Context use case exemple:
+///
+/// ```ignore
+/// #[run_with_py]
+/// fn compute_sum_with_dict(context: PythonTaskContext) -> Result<PythonTaskResult, PythonTaskError> {
+///     // Convert the context to a PyObject
+///     let py_context = context.to_object(py);
+///
+///     // Extract the PyObject from the Py<PyAny>
+///     let py_object = py_context.as_ref(py);
+///
+///     // Now, downcast to PyDict
+///     let py_dict = py_object.downcast::<PyDict>().expect("Expected a PyDict");
+///
+///     let context_mapping = PyDict::new(py);
+///     context_mapping.set_item("context_dict", py_dict).unwrap();
+///
+///    let result_sum: i32 = py
+///         .eval(
+///             "context_dict.get('a') + context_dict.get('b')",
+///             Some(context_mapping),
+///             None,
+///         )?
+///         .extract()?;
+///     Ok(PythonTaskResult::Int(result_sum))
 /// }
 /// ```
 ///
