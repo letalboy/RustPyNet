@@ -3,6 +3,9 @@
 
 RustPyNet is designed to bridge the gap between Python and Rust, offering a Python operations processing pool that integrates seamlessly with the PyO3 crate.
 
+- You can see the crate in: https://crates.io/crates/RustPyNet/
+- And the crate docs in: https://docs.rs/RustPyNet/0.1.1/RustPyNet/
+
 ## Objective
 
 The primary goal of RustPyNet is to address the limitations posed by Python's Global Interpreter Lock (GIL). By facilitating multi-threaded operations, RustPyNet allows for parallel execution of Python functions, even though it's bound to a single interpreter. This makes it particularly suitable for scenarios where the bulk of the workload is handled by Rust, but there's a need to execute smaller tasks in Python.
