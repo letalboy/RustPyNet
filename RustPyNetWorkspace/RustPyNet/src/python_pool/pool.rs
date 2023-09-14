@@ -13,8 +13,13 @@ use rand::Rng;
 
 use std::fmt::{self, format};
 
+use std::fmt::Debug;
+
 use pyo3::types::{IntoPyDict, PyDict, PyList, PyString, PyTuple};
 use pyo3::{Python, ToPyObject};
+
+use rayon::prelude::*;
+use std::process::Command;
 
 use crate::CLIENT_PYTHON_PROCESS_QUEUE;
 
@@ -259,12 +264,16 @@ pub trait TaskQueue {
 }
 
 /// A trait representing tasks that can be executed in a Python context.
-pub trait PythonTask {
+pub trait PythonTask: Debug {
     fn execute(
         &self,
         py: Python,
         tx: Sender<MyResult<PythonTaskResult>>,
     ) -> MyResult<PythonTaskResult>;
+
+    fn serialize(&self) -> String {
+        format!("{:?}", self) // This is a placeholder, adjust as needed
+    }
 }
 
 // Implementation for the TaskQueue trait for PythonTaskQueue.
@@ -327,6 +336,7 @@ impl PythonTaskQueue {
 ///
 /// This function will continuously check the global task queue for tasks,
 /// execute them in a Python context, and send back the results.
+
 pub fn start_processing_host_python_tasks() {
     println!("Start processing python calls!");
 
@@ -338,23 +348,32 @@ pub fn start_processing_host_python_tasks() {
         );
 
         // Check the number of tasks in the queue.
-        let num_tasks = tasks_clone.lock().unwrap().len();
+        let mut tasks = tasks_clone.lock().unwrap();
+        let num_tasks = tasks.len();
         if num_tasks > 0 {
             println!("Number of tasks in queue: {}", num_tasks);
 
-            // Acquire the GIL and execute the Python tasks.
-            let gil_guard = Python::acquire_gil();
-            let py = gil_guard.python();
+            // Use rayon to parallelize task execution across processes
+            let mut tasks_vec: Vec<_> = tasks.drain(..).collect();
+            tasks_vec.par_iter_mut().for_each(|(task, tx)| {
+                let output = Command::new("python")
+                    .arg("your_python_script.py")
+                    .arg(task.serialize()) // assuming you can serialize the task
+                    .output()
+                    .expect("Failed to execute process");
 
-            while let Some((task, tx)) = tasks_clone.lock().unwrap().pop_front() {
-                println!("Executing a task from the queue...");
-                match task.execute(py, tx) {
-                    Ok(_) => println!("Task successfully executed."),
-                    Err(e) => println!("Error executing task: {:?}", e),
+                if output.status.success() {
+                    println!("Task successfully executed.");
+                } else {
+                    eprintln!(
+                        "Error executing task: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
                 }
+            });
 
-                println!("Task executed.");
-            }
+            // Clear the tasks
+            tasks.clear();
         } else {
             // If no tasks, sleep for a short duration before checking again.
             std::thread::sleep(std::time::Duration::from_millis(100));

@@ -52,6 +52,8 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
     let task_struct_name = format_ident!("{}Task", name.to_string().to_camel_case());
 
     let expanded = quote! {
+
+        #[derive(Debug)]
         struct #task_struct_name {
             context: PythonTaskContext,
         }
@@ -73,6 +75,12 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
                     Ok(_) => Ok(PythonTaskResult::None),
                     Err(_) => Err(PythonTaskError::OtherError("Failed to send result back.".to_string())),
                 }
+            }
+
+            fn serialize(&self) -> String {
+                // Implement serialization logic here.
+                // For now, let's use a placeholder:
+                format!("{:?}", self)
             }
         }
 
