@@ -50,10 +50,10 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let task_struct_name = format_ident!("{}Task", name.to_string().to_camel_case());
+    let wrapped_task_name = format_ident!("{}SerializableTask", name.to_string().to_camel_case());
 
     let expanded = quote! {
-
-        #[derive(Debug)]
+        #[derive(Debug, Serialize, Deserialize)]
         struct #task_struct_name {
             context: PythonTaskContext,
         }
@@ -76,12 +76,6 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
                     Err(_) => Err(PythonTaskError::OtherError("Failed to send result back.".to_string())),
                 }
             }
-
-            fn serialize(&self) -> String {
-                // Implement serialization logic here.
-                // For now, let's use a placeholder:
-                format!("{:?}", self)
-            }
         }
 
         fn #name(context: &PythonTaskContext) -> #ret_type {
@@ -89,12 +83,14 @@ pub fn run_with_py(attr: TokenStream, item: TokenStream) -> TokenStream {
                 context: context.clone(),
             };
 
+            let wrapped_task = SerializablePythonTask { task };
+
             let rx: std::sync::mpsc::Receiver<MyResult<PythonTaskResult>>;
 
             loop {
                 match RustPyNet::CLIENT_PYTHON_PROCESS_QUEUE.lock() {
                     Ok(mut python_queue) => {
-                        rx = python_queue.enqueue(Box::new(task));
+                        rx = python_queue.enqueue(wrapped_task);
                         break;
                     }
                     Err(_) => {

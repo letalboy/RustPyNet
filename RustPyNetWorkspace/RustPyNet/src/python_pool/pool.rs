@@ -11,13 +11,15 @@ use std::time::Duration;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
-use std::fmt::{self, format};
-
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt::Debug;
+use std::fmt::{self, format};
 
 use pyo3::types::{IntoPyDict, PyDict, PyList, PyString, PyTuple};
 use pyo3::{Python, ToPyObject};
 
+use core::any::Any;
 use rayon::prelude::*;
 use std::process::Command;
 
@@ -83,7 +85,7 @@ macro_rules! with_python_queue {
 /// This enum encapsulates the different types of errors that might be encountered
 /// when interfacing with Python through the `pyo3` crate. It provides a structured way
 /// to handle these errors in Rust.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum PythonTaskError {
     /// Represents a generic Python error with a given message.
     PythonError(String),
@@ -101,7 +103,7 @@ pub enum PythonTaskError {
 /// This enum models various data types and structures that
 /// can be returned from Python to Rust. It's a counterpart to `PythonTaskContext`,
 /// providing a way to easily convert between native Rust types and their Python results.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PythonTaskResult {
     /// A dictionary-like structure mapping string keys to other PythonTaskResult values.
     Map(HashMap<String, PythonTaskResult>),
@@ -165,7 +167,7 @@ impl fmt::Display for PythonTaskResult {
 /// This enum is designed to model various data types and structures that
 /// can be passed between Rust and Python, providing a way to easily convert
 /// between native Rust types and their Python counterparts.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PythonTaskContext {
     /// A dictionary-like structure mapping string keys to other PythonTaskContext values.
     Map(HashMap<String, PythonTaskContext>),
@@ -264,17 +266,6 @@ pub trait TaskQueue {
 }
 
 /// A trait representing tasks that can be executed in a Python context.
-pub trait PythonTask: Debug {
-    fn execute(
-        &self,
-        py: Python,
-        tx: Sender<MyResult<PythonTaskResult>>,
-    ) -> MyResult<PythonTaskResult>;
-
-    fn serialize(&self) -> String {
-        format!("{:?}", self) // This is a placeholder, adjust as needed
-    }
-}
 
 // Implementation for the TaskQueue trait for PythonTaskQueue.
 // In RustPyNet
@@ -282,7 +273,53 @@ impl TaskQueue for PythonTaskQueue {
     // Implement the methods here
 }
 
-/// Represents a queue of Python tasks that are to be executed.
+pub trait PythonTask: Debug + 'static {
+    fn execute(
+        &self,
+        py: Python,
+        tx: Sender<MyResult<PythonTaskResult>>,
+    ) -> MyResult<PythonTaskResult>;
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SerializablePythonTask<T: PythonTask + Serialize + Debug> {
+    pub task: T,
+}
+
+struct AnyTaskWrapper {
+    task: Box<dyn AnySerializablePythonTask>,
+}
+
+pub trait AnySerializablePythonTask {
+    fn as_serialized_string(&self) -> Result<String, serde_json::Error>;
+    // any other methods you need
+}
+
+impl<T: PythonTask + Serialize + Debug> SerializablePythonTask<T> {
+    pub fn to_serialized_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.task)
+    }
+}
+
+impl<T: PythonTask + Serialize> PythonTask for SerializablePythonTask<T> {
+    fn execute(
+        &self,
+        py: Python,
+        tx: Sender<MyResult<PythonTaskResult>>,
+    ) -> MyResult<PythonTaskResult> {
+        self.task.execute(py, tx)
+    }
+}
+
+impl<T: PythonTask + Serialize> SerializablePythonTask<T> {
+    fn serialize(&self) -> String {
+        serde_json::to_string(&self.task).expect("Failed to serialize task")
+    }
+    fn as_serialized_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.task)
+    }
+}
+
 pub struct PythonTaskQueue {
     tasks: Arc<
         Mutex<
@@ -303,12 +340,18 @@ impl PythonTaskQueue {
     }
 
     /// Adds a task to the queue and returns a Receiver to get the result.
-    pub fn enqueue(
+    pub fn enqueue<T: PythonTask + Serialize + for<'de> Deserialize<'de> + Send>(
         &self,
-        task: Box<dyn PythonTask + Send>,
+        task: T,
     ) -> std::sync::mpsc::Receiver<MyResult<PythonTaskResult>> {
         let (tx, rx) = std::sync::mpsc::channel();
-        self.tasks.lock().unwrap().push_back((task, tx));
+
+        let wrapped_task = SerializablePythonTask { task };
+
+        self.tasks
+            .lock()
+            .unwrap()
+            .push_back((Box::new(wrapped_task), tx));
         println!(
             "Task enqueued. Total tasks in queue: {}",
             self.tasks.lock().unwrap().len()
@@ -336,7 +379,6 @@ impl PythonTaskQueue {
 ///
 /// This function will continuously check the global task queue for tasks,
 /// execute them in a Python context, and send back the results.
-
 pub fn start_processing_host_python_tasks() {
     println!("Start processing python calls!");
 
@@ -348,32 +390,55 @@ pub fn start_processing_host_python_tasks() {
         );
 
         // Check the number of tasks in the queue.
-        let mut tasks = tasks_clone.lock().unwrap();
-        let num_tasks = tasks.len();
+        let num_tasks = tasks_clone.lock().unwrap().len();
         if num_tasks > 0 {
             println!("Number of tasks in queue: {}", num_tasks);
 
-            // Use rayon to parallelize task execution across processes
-            let mut tasks_vec: Vec<_> = tasks.drain(..).collect();
-            tasks_vec.par_iter_mut().for_each(|(task, tx)| {
-                let output = Command::new("python")
-                    .arg("your_python_script.py")
-                    .arg(task.serialize()) // assuming you can serialize the task
-                    .output()
-                    .expect("Failed to execute process");
+            while let Some((task, tx)) = tasks_clone.lock().unwrap().pop_front() {
+                println!("Executing a task from the queue...");
 
-                if output.status.success() {
-                    println!("Task successfully executed.");
+                if let Some(task_wrapper) = (&task as &dyn Any).downcast_ref::<AnyTaskWrapper>() {
+                    let serialized_task_params = task_wrapper
+                        .task
+                        .as_serialized_string()
+                        .expect("Failed to serialize task");
+
+                    let current_exe_path =
+                        std::env::current_exe().expect("Failed to get current executable's path");
+
+                    // Spawn a new Rust process to handle the task
+                    println!("About to execute subprocess...");
+                    let output = Command::new(current_exe_path)
+                        .arg("execute_task")
+                        .arg(&serialized_task_params)
+                        .output()
+                        .expect("Failed to execute process");
+                    println!("Subprocess executed.");
+
+                    // Handle the output from the subprocess
+                    if output.status.success() {
+                        let result_str = String::from_utf8_lossy(&output.stdout);
+                        // Deserialize the result_str
+                        let result: MyResult<PythonTaskResult> = serde_json::from_str(&result_str)
+                            .expect("Failed to deserialize result");
+                        println!("Subprocess succeeded.");
+                        tx.send(result).expect("Failed to send result back.");
+                    } else {
+                        eprintln!(
+                            "Error executing task: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        println!("Sending result back through channel...");
+                        tx.send(Err(PythonTaskError::OtherError(
+                            String::from_utf8_lossy(&output.stderr).to_string(),
+                        )))
+                        .expect("Failed to send error.");
+                        println!("Result sent.");
+                    }
                 } else {
-                    eprintln!(
-                        "Error executing task: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
+                    eprintln!("The task could not be serialized.");
                 }
-            });
-
-            // Clear the tasks
-            tasks.clear();
+            }
         } else {
             // If no tasks, sleep for a short duration before checking again.
             std::thread::sleep(std::time::Duration::from_millis(100));

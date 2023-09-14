@@ -1,5 +1,9 @@
+use serde::Deserialize;
+use serde::Serialize;
+use RustPyNet::python_pool::pool::AnySerializablePythonTask;
 use RustPyNet::python_pool::pool::PythonTaskError;
 use RustPyNet::python_pool::pool::PythonTaskQueue;
+use RustPyNet::python_pool::pool::SerializablePythonTask;
 use RustPyNet::python_pool::pool::{start_processing_host_python_tasks, PythonTaskResult};
 use RustPyNet::run_with_py;
 
