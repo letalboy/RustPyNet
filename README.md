@@ -1,7 +1,7 @@
 
 # RustPyNet: Python Operations Processing Pool in Rust
 
-RustPyNet is designed to bridge the gap between Python and Rust, offering a Python operations processing pool that integrates seamlessly with the PyO3 crate.
+RustPyNet is designed to bridge the gap between Python and Rust, offering a Python operations processing pool that integrates seamlessly with the PyO3 crate. RustPyNet is in a development state, working for most of the things, but has a lot of work to do, so your help is wanted! This crate also will be integrated with future things that we are working here and may be added in future to PyO3 allowing to archive true parallelization and use of multiple py links across different threads in Rust with a really parallelized architecture 
 
 - You can see the crate in: https://crates.io/crates/RustPyNet/
 - And the crate docs in: https://docs.rs/RustPyNet/0.1.3/RustPyNet/
