@@ -13,10 +13,13 @@ keywords = ["python", "threading", "pyo3"]
 [dependencies]
 rustpynet_macros = { path = "../rustpynet_macros" } # Don't forget to change this when publish to the current rustpynet_macros crate version
 md5 = "0.7"
-pyo3 = "0.15"
 lazy_static = "1.4"
 rand = "0.8.5"
 chrono = "0.4"
 syn = "1.0"
 quote = "1.0"
 proc-macro2 = "1.0"
+
+[dependencies.pyo3]
+version = "0.19.2"
+features = ["extension-module"]

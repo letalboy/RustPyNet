@@ -343,8 +343,9 @@ pub fn start_processing_host_python_tasks() {
             println!("Number of tasks in queue: {}", num_tasks);
 
             // Acquire the GIL and execute the Python tasks.
-            let gil_guard = Python::acquire_gil();
-            let py = gil_guard.python();
+            let getting_py = unsafe { Python::assume_gil_acquired() };
+            let gil_pool = unsafe { getting_py.clone().new_pool() };
+            let py = gil_pool.python();
 
             while let Some((task, tx)) = tasks_clone.lock().unwrap().pop_front() {
                 println!("Executing a task from the queue...");
