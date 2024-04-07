@@ -203,3 +203,10 @@ graph TD
 ```
 
 ---
+
+License
+RustPyNet is licensed under the Apache-2.0 license or the MIT license, at your option.
+
+Python is licensed under the Python License.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in RustPyNet by you, as defined in the Apache License, shall be dual-licensed as above, without any additional terms or conditions.
